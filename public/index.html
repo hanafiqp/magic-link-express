@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Magic Link Login</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f4f4f9;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+    input[type="email"] {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .message {
+      margin-top: 20px;
+      color: green;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Magic Link Login</h1>
+    <form id="loginForm">
+      <input type="email" id="email" placeholder="Enter your email" required>
+      <button type="submit">Send Magic Link</button>
+    </form>
+    <div id="message" class="message"></div>
+  </div>
+
+  <script>
+    const socket = io('http://localhost:3000');
+
+    socket.on('connect', () => {
+        console.log('Connected to server');
+        
+        // Join room based on email (if known)
+        const savedUser = localStorage.getItem('user');
+        if (savedUser) {
+            const userData = JSON.parse(savedUser);
+            socket.emit('join_room', userData.email);
+        }
+    });
+
+    // Listen for authentication event
+    socket.on('user_authenticated', (data) => {
+        alert(`User authenticated: ${data.email}`);
+        console.log('User authenticated:', data);
+        const messageDiv = document.getElementById('message');
+        messageDiv.textContent = `User authenticated: ${data.email}`;
+        messageDiv.classList.remove('error');
+        messageDiv.classList.add('message');
+        // Save session info
+        localStorage.setItem('token', data.sessionToken);
+        localStorage.setItem('user', JSON.stringify({
+            email: data.email,
+            userId: data.userId,
+        }));
+
+        alert('Logged in from another device!');
+        window.location.href = '/dashboard';
+    });
+  
+    document.getElementById('loginForm').addEventListener('submit', async (event) => {
+      event.preventDefault(); // Prevent default form submission
+  
+      const email = document.getElementById('email').value;
+      const messageDiv = document.getElementById('message');
+  
+      try {
+        // Send the email to the backend
+        const response = await fetch('http://localhost:3000/auth/magiclink', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email }),
+        });
+  
+        const data = await response.json();
+  
+        if (response.ok) {
+          // Join the user's room using their email
+          socket.emit('join_room', email);
+  
+          // Display success message
+          messageDiv.textContent = data.message;
+          messageDiv.classList.remove('error');
+          messageDiv.classList.add('message');
+        } else {
+          // Display error message
+          messageDiv.textContent = data.error || 'Something went wrong';
+          messageDiv.classList.remove('message');
+          messageDiv.classList.add('error');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        messageDiv.textContent = 'Failed to send magic link';
+        messageDiv.classList.remove('message');
+        messageDiv.classList.add('error');
+      }
+    });
+  </script>
+</body>
+</html>
